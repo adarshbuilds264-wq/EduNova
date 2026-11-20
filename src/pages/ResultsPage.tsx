@@ -1,7 +1,13 @@
 import React, { useMemo, useState } from 'react';
-import { Download, Search, FileText, X, Sparkles, Printer, AlertCircle } from 'lucide-react';
+import { Download, FileText, Sparkles, Printer, AlertCircle } from 'lucide-react';
 import { api } from '../services/api';
 import type { Examination, StudentAIAnalysis, StudentResult } from '../types';
+import { DataTable, type DataTableColumn } from '../components/DataTable';
+import { SearchBar } from '../components/SearchBar';
+import { StudentAvatar } from '../components/StudentAvatar';
+import { StatusBadge } from '../components/StatusBadge';
+import { Modal } from '../components/Modal';
+import { EduNovaLogo } from '../components/EduNovaLogo';
 
 interface ResultsPageProps {
   results: StudentResult[];
@@ -20,13 +26,24 @@ export const ResultsPage: React.FC<ResultsPageProps> = ({
 }) => {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'PASS' | 'FAIL'>('ALL');
+  const [sortKey, setSortKey] = useState<string>('percentage');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
   const [selectedStudent, setSelectedStudent] = useState<StudentResult | null>(null);
   const [aiAnalysis, setAiAnalysis] = useState<StudentAIAnalysis | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
 
+  const handleSort = (key: string) => {
+    if (sortKey === key) {
+      setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortKey(key);
+      setSortDir(key === 'percentage' || key === 'total_obtained' ? 'desc' : 'asc');
+    }
+  };
+
   const filtered = useMemo(() => {
-    return results.filter((r) => {
+    const list = results.filter((r) => {
       if (statusFilter !== 'ALL' && r.status !== statusFilter) return false;
       if (search.trim()) {
         const q = search.toLowerCase();
@@ -38,7 +55,18 @@ export const ResultsPage: React.FC<ResultsPageProps> = ({
       }
       return true;
     });
-  }, [results, search, statusFilter]);
+
+    list.sort((a, b) => {
+      let cmp = 0;
+      if (sortKey === 'percentage') cmp = a.percentage - b.percentage;
+      else if (sortKey === 'total_obtained') cmp = a.total_obtained - b.total_obtained;
+      else if (sortKey === 'name') cmp = a.name.localeCompare(b.name);
+      else cmp = a.roll_no.localeCompare(b.roll_no);
+      return sortDir === 'asc' ? cmp : -cmp;
+    });
+
+    return list;
+  }, [results, search, statusFilter, sortKey, sortDir]);
 
   const handleExport = async () => {
     try {
@@ -68,24 +96,103 @@ export const ResultsPage: React.FC<ResultsPageProps> = ({
     }
   };
 
+  const activeExam = examinations.find((e) => e.id === selectedExamId);
+
+  const columns: DataTableColumn<StudentResult>[] = [
+    {
+      key: 'roll_no',
+      header: 'Roll No',
+      sortable: true,
+      className: 'font-mono text-xs font-semibold text-[#24243A] tabular-nums',
+      render: (r) => r.roll_no,
+    },
+    {
+      key: 'name',
+      header: 'Student',
+      sortable: true,
+      render: (r) => (
+        <div className="flex items-center gap-2.5">
+          <StudentAvatar name={r.name} size="sm" />
+          <div>
+            <p className="font-semibold text-[#24243A]">{r.name}</p>
+            <p className="text-xs text-[#85859B]">
+              {r.branch} · Sem {r.semester}
+            </p>
+          </div>
+        </div>
+      ),
+    },
+    {
+      key: 'total_obtained',
+      header: 'Total Marks',
+      align: 'right',
+      sortable: true,
+      className: 'font-mono tabular-nums text-[#24243A]',
+      render: (r) => `${r.total_obtained} / ${r.total_maximum}`,
+    },
+    {
+      key: 'percentage',
+      header: 'Percentage',
+      align: 'right',
+      sortable: true,
+      className: 'font-mono tabular-nums font-bold text-[#7357E8]',
+      render: (r) => `${r.percentage.toFixed(2)}%`,
+    },
+    {
+      key: 'grade',
+      header: 'Grade',
+      align: 'right',
+      render: (r) => <StatusBadge label={r.grade} />,
+    },
+    {
+      key: 'status',
+      header: 'Status',
+      render: (r) => (
+        <div>
+          <StatusBadge label={r.status} />
+          {r.failed_subjects.length > 0 && (
+            <div className="text-[11px] text-[#C23E3E] mt-1">
+              Failed: {r.failed_subjects.join(', ')}
+            </div>
+          )}
+        </div>
+      ),
+    },
+    {
+      key: 'marksheet',
+      header: 'Marksheet',
+      align: 'right',
+      render: (r) => (
+        <button
+          type="button"
+          onClick={() => openReport(r)}
+          className="inline-flex items-center gap-1.5 rounded-xl border border-[#ECEBF3] bg-[#F7F7FC] px-3 py-1.5 text-xs font-semibold text-[#24243A] hover:bg-[#EEE9FF] hover:text-[#7357E8] whitespace-nowrap transition-colors"
+        >
+          <FileText className="w-3.5 h-3.5" />
+          Marksheet
+        </button>
+      ),
+    },
+  ];
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 className="font-display text-2xl font-bold tracking-tight text-slate-900">
+          <h1 className="font-display text-2xl font-bold tracking-tight text-[#24243A]">
             Examination Results Ledger
           </h1>
-          <p className="text-sm text-slate-500 mt-0.5">
-            Automated totals, percentages, grades, and subject-wise pass status calculated by Python.
+          <p className="text-sm text-[#85859B] mt-0.5">
+            Automated totals, percentages, grades, and official EduNova report cards.
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <select
             aria-label="Select examination"
             value={selectedExamId}
             onChange={(e) => onSelectExam(Number(e.target.value))}
-            className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#5B3DF5]"
+            className="rounded-xl border border-[#ECEBF3] bg-white px-3.5 py-2 text-xs font-semibold text-[#24243A] focus:outline-none focus:ring-2 focus:ring-[#7357E8]/30"
           >
             {examinations.map((ex) => (
               <option key={ex.id} value={ex.id}>
@@ -97,7 +204,7 @@ export const ResultsPage: React.FC<ResultsPageProps> = ({
           <button
             type="button"
             onClick={handleExport}
-            className="inline-flex items-center gap-2 rounded-lg bg-[#0F1E3D] px-4 py-2 text-sm font-medium text-white hover:bg-[#192F5D] transition-colors whitespace-nowrap"
+            className="inline-flex items-center gap-2 rounded-xl bg-[#7357E8] px-4 py-2 text-xs font-semibold text-white hover:bg-[#4935A8] transition-colors whitespace-nowrap"
           >
             <Download className="w-4 h-4" />
             Export Results CSV
@@ -106,28 +213,26 @@ export const ResultsPage: React.FC<ResultsPageProps> = ({
       </div>
 
       {/* Filters */}
-      <div className="bg-white border border-slate-200 rounded-xl p-4 flex flex-wrap items-center justify-between gap-4">
-        <div className="relative flex-1 min-w-[240px] max-w-md">
-          <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-          <input
-            type="text"
+      <div className="edunova-card p-4 flex flex-wrap items-center justify-between gap-4">
+        <div className="flex-1 min-w-[240px] max-w-md">
+          <SearchBar
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={setSearch}
             placeholder="Filter by student name, roll number, or branch..."
-            className="w-full rounded-lg border border-slate-200 bg-slate-50 pl-9 pr-3 py-2 text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#5B3DF5]"
+            ariaLabel="Filter results"
           />
         </div>
 
-        <div className="flex items-center gap-1 p-1 bg-slate-100 rounded-lg">
+        <div className="flex items-center gap-1 p-1 bg-[#F7F7FC] border border-[#ECEBF3] rounded-xl">
           {(['ALL', 'PASS', 'FAIL'] as const).map((st) => (
             <button
               key={st}
               type="button"
               onClick={() => setStatusFilter(st)}
-              className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+              className={`px-3.5 py-1.5 text-xs font-semibold rounded-lg transition-colors ${
                 statusFilter === st
-                  ? 'bg-white text-slate-900 shadow-sm'
-                  : 'text-slate-600 hover:text-slate-900'
+                  ? 'bg-white text-[#7357E8] shadow-sm'
+                  : 'text-[#85859B] hover:text-[#24243A]'
               }`}
             >
               {st === 'ALL' ? 'All Results' : st}
@@ -136,234 +241,173 @@ export const ResultsPage: React.FC<ResultsPageProps> = ({
         </div>
       </div>
 
-      {/* Results Table */}
-      <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-slate-50 border-b border-slate-200 text-xs text-slate-500">
-              <tr>
-                <th className="text-left font-medium px-6 py-3">Roll No</th>
-                <th className="text-left font-medium px-4 py-3">Student</th>
-                <th className="text-right font-medium px-4 py-3">Total Marks</th>
-                <th className="text-right font-medium px-4 py-3">Percentage</th>
-                <th className="text-right font-medium px-4 py-3">Grade</th>
-                <th className="text-left font-medium px-4 py-3">Status</th>
-                <th className="text-right font-medium px-6 py-3">Marksheet</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {filtered.map((r) => (
-                <tr key={r.student_id} className="hover:bg-slate-50">
-                  <td className="px-6 py-3 font-mono text-xs text-slate-700 tabular-nums">
-                    {r.roll_no}
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="font-medium text-slate-900">{r.name}</div>
-                    <div className="text-xs text-slate-500">
-                      {r.branch} · Sem {r.semester}
-                    </div>
-                  </td>
-                  <td className="px-4 py-3 text-right font-mono tabular-nums text-slate-900">
-                    {r.total_obtained} / {r.total_maximum}
-                  </td>
-                  <td className="px-4 py-3 text-right font-mono tabular-nums font-semibold text-slate-900">
-                    {r.percentage.toFixed(2)}%
-                  </td>
-                  <td className="px-4 py-3 text-right font-mono font-bold text-[#0F1E3D]">
-                    {r.grade}
-                  </td>
-                  <td className="px-4 py-3 text-xs font-semibold">
-                    <span
-                      className={
-                        r.status === 'PASS'
-                          ? 'text-emerald-600'
-                          : r.status === 'FAIL'
-                          ? 'text-red-600'
-                          : 'text-slate-400'
-                      }
-                    >
-                      {r.status}
-                    </span>
-                    {r.failed_subjects.length > 0 && (
-                      <div className="text-[11px] font-normal text-red-500">
-                        Failed: {r.failed_subjects.join(', ')}
-                      </div>
-                    )}
-                  </td>
-                  <td className="px-6 py-3 text-right">
-                    <button
-                      type="button"
-                      onClick={() => openReport(r)}
-                      className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-100 whitespace-nowrap"
-                    >
-                      <FileText className="w-3.5 h-3.5" />
-                      Marksheet
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
+      <DataTable
+        data={filtered}
+        columns={columns}
+        rowKey={(r) => r.student_id}
+        sortKey={sortKey}
+        sortDirection={sortDir}
+        onSort={handleSort}
+        emptyState={<span>No results match the current filter.</span>}
+      />
 
-      {/* Marksheet Transcript Modal */}
-      {selectedStudent && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4">
-          <div className="w-full max-w-2xl rounded-xl bg-white border border-slate-200 p-6 shadow-xl max-h-[90vh] overflow-y-auto">
-            <div className="flex items-start justify-between pb-4 border-b border-slate-200">
-              <div>
-                <p className="text-xs font-medium text-[#5B3DF5]">Official Academic Marksheet</p>
-                <h2 className="font-display text-xl font-bold text-slate-900 mt-0.5">
-                  {selectedStudent.name}
-                </h2>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  Roll {selectedStudent.roll_no} · {selectedStudent.course} {selectedStudent.branch} · Semester{' '}
-                  {selectedStudent.semester}
+      {/* EduNova Report Card Modal */}
+      <Modal
+        open={Boolean(selectedStudent)}
+        onClose={() => setSelectedStudent(null)}
+        title={selectedStudent?.name || 'Marksheet'}
+        subtitle={
+          selectedStudent
+            ? `Roll ${selectedStudent.roll_no} · ${selectedStudent.course} ${selectedStudent.branch} · Semester ${selectedStudent.semester}`
+            : undefined
+        }
+        maxWidthClass="max-w-2xl"
+        headerActions={
+          selectedStudent && (
+            <>
+              <button
+                type="button"
+                onClick={async () => {
+                  try {
+                    await api.downloadStudentResultCSV(
+                      selectedStudent.student_id,
+                      selectedStudent.roll_no,
+                      selectedExamId
+                    );
+                    onNotify(`Exported individual CSV marksheet for ${selectedStudent.name}`);
+                  } catch (err: any) {
+                    onNotify(err?.message || 'Export failed', 'error');
+                  }
+                }}
+                className="inline-flex items-center gap-1.5 rounded-xl border border-[#ECEBF3] px-3 py-1.5 text-xs font-semibold text-[#24243A] hover:bg-[#F7F7FC] whitespace-nowrap"
+              >
+                <Download className="w-3.5 h-3.5" />
+                CSV
+              </button>
+              <button
+                type="button"
+                onClick={() => window.print()}
+                className="inline-flex items-center gap-1.5 rounded-xl border border-[#ECEBF3] px-3 py-1.5 text-xs font-semibold text-[#24243A] hover:bg-[#F7F7FC]"
+              >
+                <Printer className="w-3.5 h-3.5" />
+                Print
+              </button>
+            </>
+          )
+        }
+      >
+        {selectedStudent && (
+          <div className="space-y-5">
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-[#F7F7FC] border border-[#ECEBF3] p-4">
+              <EduNovaLogo size="sm" />
+              <div className="text-right">
+                <p className="text-xs font-bold text-[#7357E8]">Official Academic Marksheet</p>
+                <p className="text-[11px] text-[#85859B]">
+                  {activeExam?.exam_name ?? 'Examination'} ({activeExam?.exam_date ?? ''})
                 </p>
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={async () => {
-                    try {
-                      await api.downloadStudentResultCSV(
-                        selectedStudent.student_id,
-                        selectedStudent.roll_no,
-                        selectedExamId
-                      );
-                      onNotify(`Exported individual CSV marksheet for ${selectedStudent.name}`);
-                    } catch (err: any) {
-                      onNotify(err?.message || 'Export failed', 'error');
-                    }
-                  }}
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 whitespace-nowrap"
-                >
-                  <Download className="w-3.5 h-3.5" />
-                  CSV
-                </button>
-                <button
-                  type="button"
-                  onClick={() => window.print()}
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
-                >
-                  <Printer className="w-3.5 h-3.5" />
-                  Print
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setSelectedStudent(null)}
-                  className="p-1 text-slate-400 hover:text-slate-700"
-                >
-                  <X className="w-5 h-5" />
-                </button>
               </div>
             </div>
 
-            <div className="mt-5">
-              <table className="w-full text-sm border border-slate-200 rounded-lg overflow-hidden">
-                <thead className="bg-slate-50 text-xs text-slate-500 border-b border-slate-200">
+            <div className="rounded-xl border border-[#ECEBF3] overflow-hidden">
+              <table className="w-full text-sm">
+                <thead className="bg-[#F7F7FC] text-xs text-[#85859B] border-b border-[#ECEBF3]">
                   <tr>
-                    <th className="text-left px-4 py-2.5 font-medium">Code</th>
-                    <th className="text-left px-4 py-2.5 font-medium">Subject</th>
-                    <th className="text-right px-4 py-2.5 font-medium">Obtained</th>
-                    <th className="text-right px-4 py-2.5 font-medium">Max</th>
-                    <th className="text-right px-4 py-2.5 font-medium">Result</th>
+                    <th className="text-left px-4 py-2.5 font-semibold">Code</th>
+                    <th className="text-left px-4 py-2.5 font-semibold">Subject</th>
+                    <th className="text-right px-4 py-2.5 font-semibold">Obtained</th>
+                    <th className="text-right px-4 py-2.5 font-semibold">Max</th>
+                    <th className="text-right px-4 py-2.5 font-semibold">Result</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100">
+                <tbody className="divide-y divide-[#ECEBF3]/70">
                   {selectedStudent.subject_breakdown.map((b) => (
                     <tr key={b.subject_code}>
-                      <td className="px-4 py-2.5 font-mono text-xs text-slate-600">{b.subject_code}</td>
-                      <td className="px-4 py-2.5 text-slate-900">{b.subject_name}</td>
-                      <td className="px-4 py-2.5 text-right font-mono tabular-nums font-medium">
+                      <td className="px-4 py-2.5 font-mono text-xs text-[#7357E8] font-semibold">
+                        {b.subject_code}
+                      </td>
+                      <td className="px-4 py-2.5 text-[#24243A] font-medium">{b.subject_name}</td>
+                      <td className="px-4 py-2.5 text-right font-mono tabular-nums font-semibold">
                         {b.obtained_marks}
                       </td>
-                      <td className="px-4 py-2.5 text-right font-mono tabular-nums text-slate-500">
+                      <td className="px-4 py-2.5 text-right font-mono tabular-nums text-[#85859B]">
                         {b.max_marks}
                       </td>
-                      <td
-                        className={`px-4 py-2.5 text-right text-xs font-semibold ${
-                          b.passed ? 'text-emerald-600' : 'text-red-600'
-                        }`}
-                      >
-                        {b.passed ? 'PASS' : 'FAIL'}
+                      <td className="px-4 py-2.5 text-right">
+                        <StatusBadge label={b.passed ? 'PASS' : 'FAIL'} />
                       </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
+            </div>
 
-              <div className="mt-4 grid grid-cols-4 gap-4 rounded-lg bg-slate-50 border border-slate-200 p-4 text-center">
-                <div>
-                  <p className="text-xs text-slate-500">Grand Total</p>
-                  <p className="font-mono text-base font-bold text-slate-900 tabular-nums">
-                    {selectedStudent.total_obtained} / {selectedStudent.total_maximum}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-xs text-slate-500">Percentage</p>
-                  <p className="font-mono text-base font-bold text-[#5B3DF5] tabular-nums">
-                    {selectedStudent.percentage.toFixed(2)}%
-                  </p>
-                </div>
-                <div>
-                  <p className="text-xs text-slate-500">Final Grade</p>
-                  <p className="font-mono text-base font-bold text-slate-900">{selectedStudent.grade}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-slate-500">Overall Result</p>
-                  <p
-                    className={`font-mono text-base font-bold ${
-                      selectedStudent.status === 'PASS' ? 'text-emerald-600' : 'text-red-600'
-                    }`}
-                  >
-                    {selectedStudent.status}
-                  </p>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 rounded-2xl bg-[#F7F7FC] border border-[#ECEBF3] p-4 text-center">
+              <div>
+                <p className="text-[11px] text-[#85859B]">Grand Total</p>
+                <p className="font-mono text-base font-bold text-[#24243A] tabular-nums mt-0.5">
+                  {selectedStudent.total_obtained} / {selectedStudent.total_maximum}
+                </p>
+              </div>
+              <div>
+                <p className="text-[11px] text-[#85859B]">Percentage</p>
+                <p className="font-mono text-base font-bold text-[#7357E8] tabular-nums mt-0.5">
+                  {selectedStudent.percentage.toFixed(2)}%
+                </p>
+              </div>
+              <div>
+                <p className="text-[11px] text-[#85859B]">Final Grade</p>
+                <p className="font-mono text-base font-bold text-[#24243A] mt-0.5">
+                  {selectedStudent.grade}
+                </p>
+              </div>
+              <div>
+                <p className="text-[11px] text-[#85859B]">Overall Result</p>
+                <div className="mt-1">
+                  <StatusBadge label={selectedStudent.status} />
                 </div>
               </div>
             </div>
 
-            <div className="mt-5 pt-5 border-t border-slate-200">
+            <div className="pt-4 border-t border-[#ECEBF3]">
               <div className="flex items-center justify-between">
-                <p className="text-xs font-semibold text-slate-700">AI Performance Evaluation</p>
+                <p className="text-xs font-bold text-[#24243A]">AI Performance Evaluation</p>
                 <button
                   type="button"
                   onClick={runEvaluation}
                   disabled={aiLoading}
-                  className="inline-flex items-center gap-1.5 rounded-lg bg-[#5B3DF5] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[#4C30D6] disabled:opacity-50"
+                  className="inline-flex items-center gap-1.5 rounded-xl bg-[#7357E8] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[#4935A8] disabled:opacity-50"
                 >
                   <Sparkles className="w-3.5 h-3.5" />
                   {aiLoading ? 'Generating...' : 'Generate AI Remarks'}
                 </button>
               </div>
               {aiError && (
-                <div className="mt-3 flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-700">
+                <div className="mt-3 flex items-center gap-2 rounded-xl border border-[#EF6262]/30 bg-[#FDECEC] p-3 text-xs text-[#C23E3E]">
                   <AlertCircle className="w-4 h-4 shrink-0" />
                   <span>{aiError}</span>
                 </div>
               )}
               {aiAnalysis && (
-                <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-4 text-xs text-slate-700 space-y-2">
-                  <p className="text-sm text-slate-900">{aiAnalysis.summary}</p>
+                <div className="mt-3 rounded-xl border border-[#ECEBF3] bg-[#F7F7FC] p-4 text-xs text-[#24243A] space-y-2">
+                  <p className="text-sm leading-relaxed">{aiAnalysis.summary}</p>
                   <p>
-                    <span className="font-semibold text-emerald-700">Strengths: </span>
+                    <span className="font-bold text-[#218758]">Strengths: </span>
                     {aiAnalysis.strengths.join('; ')}
                   </p>
                   <p>
-                    <span className="font-semibold text-amber-700">Focus Areas: </span>
+                    <span className="font-bold text-[#B56E10]">Focus Areas: </span>
                     {aiAnalysis.focusAreas.join('; ')}
                   </p>
                   <p>
-                    <span className="font-semibold text-slate-900">Recommendation: </span>
+                    <span className="font-bold text-[#24243A]">Recommendation: </span>
                     {aiAnalysis.recommendedPlan}
                   </p>
                 </div>
               )}
             </div>
           </div>
-        </div>
-      )}
+        )}
+      </Modal>
     </div>
   );
 };

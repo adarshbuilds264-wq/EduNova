@@ -1,7 +1,10 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Save } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { Download, Save, Upload } from 'lucide-react';
 import { api } from '../services/api';
 import type { Examination, MarkRecord, Student, Subject } from '../types';
+import { StatusBadge } from '../components/StatusBadge';
+import { SearchBar } from '../components/SearchBar';
 
 interface MarksPageProps {
   examinations: Examination[];
@@ -30,6 +33,8 @@ export const MarksPage: React.FC<MarksPageProps> = ({
   const [students, setStudents] = useState<Student[]>([]);
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [marks, setMarks] = useState<MarkRecord[]>([]);
+  const [semesterFilter, setSemesterFilter] = useState<string>('ALL');
+  const [subjectSearch, setSubjectSearch] = useState('');
   const [selectedStudentId, setSelectedStudentId] = useState<number>(0);
   const [draftScores, setDraftScores] = useState<Record<number, string>>({});
   const [saving, setSaving] = useState(false);
@@ -66,6 +71,34 @@ export const MarksPage: React.FC<MarksPageProps> = ({
     }
     setDraftScores(map);
   }, [selectedStudentId, marks, subjects]);
+
+  const filteredStudents = useMemo(() => {
+    if (semesterFilter === 'ALL') return students;
+    return students.filter((s) => String(s.semester) === semesterFilter);
+  }, [students, semesterFilter]);
+
+  useEffect(() => {
+    if (
+      filteredStudents.length > 0 &&
+      !filteredStudents.some((s) => s.id === selectedStudentId)
+    ) {
+      setSelectedStudentId(filteredStudents[0].id);
+    }
+  }, [filteredStudents, selectedStudentId]);
+
+  const visibleSubjects = useMemo(() => {
+    const q = subjectSearch.trim().toLowerCase();
+    return subjects.filter((sub) => {
+      if (semesterFilter !== 'ALL' && String(sub.semester) !== semesterFilter) return false;
+      if (q) {
+        return (
+          sub.subject_name.toLowerCase().includes(q) ||
+          sub.subject_code.toLowerCase().includes(q)
+        );
+      }
+      return true;
+    });
+  }, [subjects, semesterFilter, subjectSearch]);
 
   const liveSummary = useMemo(() => {
     let obtained = 0;
@@ -134,157 +167,212 @@ export const MarksPage: React.FC<MarksPageProps> = ({
     }
   };
 
+  const handleExportMarks = async () => {
+    try {
+      await api.downloadExportCSV('marks', selectedExamId);
+      onNotify('Exported Examination Marks CSV');
+    } catch (err: any) {
+      onNotify(err?.message || 'Marks export failed', 'error');
+    }
+  };
+
   const selectedStudent = students.find((s) => s.id === selectedStudentId);
+  const semesters = useMemo(() => {
+    const set = new Set<number>();
+    students.forEach((s) => set.add(s.semester));
+    return Array.from(set).sort((a, b) => a - b);
+  }, [students]);
 
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 className="font-display text-2xl font-bold tracking-tight text-slate-900">
-            Marks Entry &amp; Verification
+          <h1 className="font-display text-2xl font-bold tracking-tight text-[#24243A]">
+            Marks Management &amp; Entry
           </h1>
-          <p className="text-sm text-slate-500 mt-0.5">
-            Enter or update subject-wise examination scores with live grade and passing rule verification.
+          <p className="text-sm text-[#85859B] mt-0.5">
+            Enter or update subject-wise examination scores with real-time grade and passing verification.
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
-          <select
-            aria-label="Select examination"
-            value={selectedExamId}
-            onChange={(e) => onSelectExam(Number(e.target.value))}
-            className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#5B3DF5]"
+        <div className="flex flex-wrap items-center gap-2.5">
+          <button
+            type="button"
+            onClick={handleExportMarks}
+            className="inline-flex items-center gap-1.5 rounded-xl border border-[#ECEBF3] bg-white px-3.5 py-2 text-xs font-semibold text-[#24243A] hover:bg-[#F7F7FC] whitespace-nowrap"
           >
-            {examinations.map((ex) => (
-              <option key={ex.id} value={ex.id}>
-                {ex.exam_name}
-              </option>
-            ))}
-          </select>
+            <Download className="w-3.5 h-3.5" />
+            Export Marks CSV
+          </button>
 
-          <select
-            aria-label="Select student"
-            value={selectedStudentId}
-            onChange={(e) => setSelectedStudentId(Number(e.target.value))}
-            className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#5B3DF5]"
+          <Link
+            to="/import-export"
+            className="inline-flex items-center gap-1.5 rounded-xl border border-[#ECEBF3] bg-white px-3.5 py-2 text-xs font-semibold text-[#24243A] hover:bg-[#F7F7FC] whitespace-nowrap"
           >
-            {students.map((st) => (
-              <option key={st.id} value={st.id}>
-                {st.roll_no} — {st.name}
-              </option>
-            ))}
-          </select>
+            <Upload className="w-3.5 h-3.5" />
+            Bulk CSV Import
+          </Link>
+        </div>
+      </div>
+
+      {/* Filter Controls */}
+      <div className="edunova-card p-4 flex flex-wrap items-center gap-3">
+        <select
+          aria-label="Select examination"
+          value={selectedExamId}
+          onChange={(e) => onSelectExam(Number(e.target.value))}
+          className="rounded-xl border border-[#ECEBF3] bg-[#F7F7FC] px-3.5 py-2 text-xs font-semibold text-[#24243A] focus:outline-none focus:ring-2 focus:ring-[#7357E8]/30"
+        >
+          {examinations.map((ex) => (
+            <option key={ex.id} value={ex.id}>
+              {ex.exam_name}
+            </option>
+          ))}
+        </select>
+
+        <select
+          aria-label="Filter by semester"
+          value={semesterFilter}
+          onChange={(e) => setSemesterFilter(e.target.value)}
+          className="rounded-xl border border-[#ECEBF3] bg-[#F7F7FC] px-3.5 py-2 text-xs font-semibold text-[#24243A] focus:outline-none focus:ring-2 focus:ring-[#7357E8]/30"
+        >
+          <option value="ALL">All Semesters</option>
+          {semesters.map((s) => (
+            <option key={s} value={String(s)}>
+              Semester {s}
+            </option>
+          ))}
+        </select>
+
+        <select
+          aria-label="Select student"
+          value={selectedStudentId}
+          onChange={(e) => setSelectedStudentId(Number(e.target.value))}
+          className="rounded-xl border border-[#ECEBF3] bg-[#F7F7FC] px-3.5 py-2 text-xs font-semibold text-[#24243A] focus:outline-none focus:ring-2 focus:ring-[#7357E8]/30"
+        >
+          {filteredStudents.map((st) => (
+            <option key={st.id} value={st.id}>
+              {st.roll_no} — {st.name}
+            </option>
+          ))}
+        </select>
+
+        <div className="flex-1 min-w-[200px] max-w-xs ml-auto">
+          <SearchBar
+            value={subjectSearch}
+            onChange={setSubjectSearch}
+            placeholder="Filter subjects..."
+            ariaLabel="Filter subjects"
+          />
         </div>
       </div>
 
       {/* Live Preview Summary Strip */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-5">
-        <div className="bg-white border border-slate-200 rounded-xl p-4">
-          <p className="text-xs text-slate-500">Selected Student</p>
-          <p className="mt-1 font-display font-semibold text-slate-900 truncate">
+        <div className="edunova-card p-5">
+          <p className="text-xs font-medium text-[#85859B]">Selected Student</p>
+          <p className="mt-1.5 font-display font-bold text-[#24243A] truncate">
             {selectedStudent?.name || '—'}
           </p>
-          <p className="text-xs font-mono text-slate-500">
+          <p className="text-xs font-mono text-[#85859B] mt-0.5">
             {selectedStudent ? `${selectedStudent.roll_no} · ${selectedStudent.branch}` : ''}
           </p>
         </div>
-        <div className="bg-white border border-slate-200 rounded-xl p-4">
-          <p className="text-xs text-slate-500">Calculated Total</p>
-          <p className="mt-1 font-mono text-2xl font-bold text-slate-900 tabular-nums">
+        <div className="edunova-card p-5">
+          <p className="text-xs font-medium text-[#85859B]">Calculated Total</p>
+          <p className="mt-1.5 font-display text-2xl font-bold text-[#24243A] tabular-nums">
             {liveSummary.obtained.toFixed(1)} / {liveSummary.maximum}
           </p>
         </div>
-        <div className="bg-white border border-slate-200 rounded-xl p-4">
-          <p className="text-xs text-slate-500">Projected Percentage</p>
-          <p className="mt-1 font-mono text-2xl font-bold text-[#5B3DF5] tabular-nums">
+        <div className="edunova-card p-5">
+          <p className="text-xs font-medium text-[#85859B]">Projected Percentage</p>
+          <p className="mt-1.5 font-display text-2xl font-bold text-[#7357E8] tabular-nums">
             {liveSummary.pct.toFixed(2)}%
           </p>
         </div>
-        <div className="bg-white border border-slate-200 rounded-xl p-4">
-          <p className="text-xs text-slate-500">Projected Grade &amp; Status</p>
-          <p className="mt-1 font-mono text-2xl font-bold tabular-nums">
-            <span className="text-slate-900 mr-2">{liveSummary.grade}</span>
-            <span
-              className={`text-sm ${
-                liveSummary.status === 'PASS'
-                  ? 'text-emerald-600'
-                  : liveSummary.status === 'FAIL'
-                  ? 'text-red-600'
-                  : 'text-slate-400'
-              }`}
-            >
-              {liveSummary.status}
+        <div className="edunova-card p-5">
+          <p className="text-xs font-medium text-[#85859B]">Projected Grade &amp; Status</p>
+          <div className="mt-1.5 flex items-center gap-2.5">
+            <span className="font-display text-2xl font-bold text-[#24243A]">
+              {liveSummary.grade}
             </span>
-          </p>
+            <StatusBadge label={liveSummary.status} />
+          </div>
         </div>
       </div>
 
       {/* Marks Form Table */}
-      <form noValidate onSubmit={handleSaveAll} className="bg-white border border-slate-200 rounded-xl overflow-hidden">
-        <table className="w-full text-sm">
-          <thead className="bg-slate-50 border-b border-slate-200 text-xs text-slate-500">
-            <tr>
-              <th className="text-left font-medium px-6 py-3">Subject Code</th>
-              <th className="text-left font-medium px-4 py-3">Subject Name</th>
-              <th className="text-right font-medium px-4 py-3">Passing / Max</th>
-              <th className="text-right font-medium px-4 py-3">Obtained Marks</th>
-              <th className="text-right font-medium px-6 py-3">Subject Status</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100">
-            {subjects.map((sub) => {
-              const rawVal = draftScores[sub.id] ?? '';
-              const numVal = rawVal.trim() === '' ? null : Number(rawVal);
-              const isValid = numVal !== null && !Number.isNaN(numVal) && numVal >= 0 && numVal <= sub.max_marks;
-              const isPassed = isValid && numVal! >= sub.passing_marks;
-              return (
-                <tr key={sub.id} className="hover:bg-slate-50">
-                  <td className="px-6 py-3 font-mono text-xs font-semibold text-[#0F1E3D]">
-                    {sub.subject_code}
-                  </td>
-                  <td className="px-4 py-3 font-medium text-slate-900">{sub.subject_name}</td>
-                  <td className="px-4 py-3 text-right font-mono tabular-nums text-slate-500">
-                    {sub.passing_marks} / {sub.max_marks}
-                  </td>
-                  <td className="px-4 py-3 text-right">
-                    <input
-                      type="number"
-                      step="0.5"
-                      min={0}
-                      max={sub.max_marks}
-                      value={rawVal}
-                      onChange={(e) =>
-                        setDraftScores((prev) => ({ ...prev, [sub.id]: e.target.value }))
-                      }
-                      placeholder="0–100"
-                      className="w-28 text-right rounded-lg border border-slate-200 bg-white px-3 py-1.5 font-mono text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-[#5B3DF5]"
-                    />
-                  </td>
-                  <td className="px-6 py-3 text-right text-xs font-semibold">
-                    {numVal === null ? (
-                      <span className="text-slate-400">Not Entered</span>
-                    ) : !isValid ? (
-                      <span className="text-red-600">Out of Range</span>
-                    ) : isPassed ? (
-                      <span className="text-emerald-600">PASS</span>
-                    ) : (
-                      <span className="text-red-600">FAIL (Below {sub.passing_marks})</span>
-                    )}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+      <form noValidate onSubmit={handleSaveAll} className="edunova-card overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-[#F7F7FC] border-b border-[#ECEBF3] text-xs text-[#85859B]">
+              <tr>
+                <th className="text-left font-semibold px-6 py-3.5">Subject Code</th>
+                <th className="text-left font-semibold px-4 py-3.5">Subject Name</th>
+                <th className="text-right font-semibold px-4 py-3.5">Passing / Max</th>
+                <th className="text-right font-semibold px-4 py-3.5">Obtained Marks</th>
+                <th className="text-right font-semibold px-6 py-3.5">Subject Status</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[#ECEBF3]/70">
+              {visibleSubjects.map((sub) => {
+                const rawVal = draftScores[sub.id] ?? '';
+                const numVal = rawVal.trim() === '' ? null : Number(rawVal);
+                const isValid =
+                  numVal !== null &&
+                  !Number.isNaN(numVal) &&
+                  numVal >= 0 &&
+                  numVal <= sub.max_marks;
+                const isPassed = isValid && numVal! >= sub.passing_marks;
+                return (
+                  <tr key={sub.id} className="hover:bg-[#F7F7FC]">
+                    <td className="px-6 py-3.5 font-mono text-xs font-semibold text-[#7357E8]">
+                      {sub.subject_code}
+                    </td>
+                    <td className="px-4 py-3.5 font-semibold text-[#24243A]">{sub.subject_name}</td>
+                    <td className="px-4 py-3.5 text-right font-mono tabular-nums text-[#85859B]">
+                      {sub.passing_marks} / {sub.max_marks}
+                    </td>
+                    <td className="px-4 py-3.5 text-right">
+                      <input
+                        type="number"
+                        step="0.5"
+                        min={0}
+                        max={sub.max_marks}
+                        value={rawVal}
+                        onChange={(e) =>
+                          setDraftScores((prev) => ({ ...prev, [sub.id]: e.target.value }))
+                        }
+                        placeholder="0–100"
+                        className="w-28 text-right rounded-xl border border-[#ECEBF3] bg-[#F7F7FC] px-3 py-1.5 font-mono text-sm tabular-nums focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#7357E8]/30 focus:border-[#7357E8]"
+                      />
+                    </td>
+                    <td className="px-6 py-3.5 text-right text-xs font-semibold">
+                      {numVal === null ? (
+                        <StatusBadge label="Not Entered" tone="neutral" />
+                      ) : !isValid ? (
+                        <StatusBadge label="Out of Range" tone="danger" />
+                      ) : isPassed ? (
+                        <StatusBadge label="PASS" tone="success" />
+                      ) : (
+                        <StatusBadge label={`FAIL (Below ${sub.passing_marks})`} tone="danger" />
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
 
-        <div className="px-6 py-4 border-t border-slate-200 bg-slate-50 flex items-center justify-between gap-4">
-          <p className="text-xs text-slate-500">
+        <div className="px-6 py-4 border-t border-[#ECEBF3] bg-[#F7F7FC] flex flex-wrap items-center justify-between gap-4">
+          <p className="text-xs text-[#85859B]">
             Strict validation: overall PASS requires passing every entered subject and achieving at least 50%.
           </p>
           <button
             type="submit"
             disabled={saving}
-            className="inline-flex items-center gap-2 rounded-lg bg-[#5B3DF5] px-5 py-2 text-sm font-semibold text-white hover:bg-[#4C30D6] transition-colors disabled:opacity-60 whitespace-nowrap"
+            className="inline-flex items-center gap-2 rounded-xl bg-[#7357E8] px-5 py-2 text-sm font-semibold text-white hover:bg-[#4935A8] transition-colors disabled:opacity-60 whitespace-nowrap"
           >
             <Save className="w-4 h-4" />
             {saving ? 'Saving Marks...' : 'Save Student Marks'}

@@ -1,7 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import { Plus, Trash2, X } from 'lucide-react';
+import { Plus, Trash2 } from 'lucide-react';
 import { api } from '../services/api';
 import type { AuthUser } from '../types';
+import { DataTable, type DataTableColumn } from '../components/DataTable';
+import { Modal } from '../components/Modal';
+import { StudentAvatar } from '../components/StudentAvatar';
+import { StatusBadge } from '../components/StatusBadge';
 
 interface UsersPageProps {
   currentUser: AuthUser;
@@ -61,153 +65,151 @@ export const UsersPage: React.FC<UsersPageProps> = ({ currentUser, onNotify }) =
     }
   };
 
+  const columns: DataTableColumn<AuthUser>[] = [
+    {
+      key: 'username',
+      header: 'Faculty Member',
+      render: (u) => (
+        <div className="flex items-center gap-3">
+          <StudentAvatar name={u.username} size="sm" />
+          <div>
+            <p className="font-semibold text-[#24243A]">
+              {u.username}
+              {u.id === currentUser.id && (
+                <span className="ml-2 text-xs font-normal text-[#7357E8]">(Active Session)</span>
+              )}
+            </p>
+          </div>
+        </div>
+      ),
+    },
+    {
+      key: 'email',
+      header: 'Email',
+      className: 'font-mono text-xs text-[#85859B]',
+      render: (u) => u.email,
+    },
+    {
+      key: 'role',
+      header: 'Role',
+      render: (u) => <StatusBadge label={u.role} />,
+    },
+    {
+      key: 'actions',
+      header: 'Actions',
+      align: 'right',
+      render: (u) =>
+        u.id !== currentUser.id ? (
+          <button
+            type="button"
+            onClick={() => handleDelete(u)}
+            title="Delete account"
+            className="p-1.5 rounded-lg text-[#85859B] hover:text-[#EF6262] hover:bg-[#FDECEC]"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+          </button>
+        ) : null,
+    },
+  ];
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 className="font-display text-2xl font-bold tracking-tight text-slate-900">
+          <h1 className="font-display text-2xl font-bold tracking-tight text-[#24243A]">
             User &amp; Role Management
           </h1>
-          <p className="text-sm text-slate-500 mt-0.5">
-            Create or remove Admin and Teacher credentials with bcrypt password hashing and RBAC enforcement.
+          <p className="text-sm text-[#85859B] mt-0.5">
+            Create or remove Admin and Teacher credentials with bcrypt hashing and RBAC enforcement.
           </p>
         </div>
 
         <button
           type="button"
           onClick={() => setModalOpen(true)}
-          className="inline-flex items-center gap-2 rounded-lg bg-[#5B3DF5] px-4 py-2 text-sm font-medium text-white hover:bg-[#4C30D6] whitespace-nowrap"
+          className="inline-flex items-center gap-2 rounded-xl bg-[#7357E8] px-4 py-2 text-xs font-semibold text-white hover:bg-[#4935A8] whitespace-nowrap"
         >
           <Plus className="w-4 h-4" />
           Add Faculty Account
         </button>
       </div>
 
-      <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
-        {loading ? (
-          <div className="p-8 text-center text-sm text-slate-500">Loading user accounts...</div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-slate-50 border-b border-slate-200 text-xs text-slate-500">
-                <tr>
-                  <th className="text-left font-medium px-6 py-3">Name</th>
-                  <th className="text-left font-medium px-4 py-3">Email</th>
-                  <th className="text-left font-medium px-4 py-3">Role</th>
-                  <th className="text-right font-medium px-6 py-3">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {users.map((u) => (
-                  <tr key={u.id} className="hover:bg-slate-50">
-                    <td className="px-6 py-3 font-medium text-slate-900">
-                      {u.username}
-                      {u.id === currentUser.id && (
-                        <span className="ml-2 text-xs text-slate-400">(Active Session)</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 font-mono text-xs text-slate-600">{u.email}</td>
-                    <td className="px-4 py-3 font-mono text-xs font-semibold text-[#0F1E3D]">
-                      {u.role}
-                    </td>
-                    <td className="px-6 py-3 text-right">
-                      {u.id !== currentUser.id && (
-                        <button
-                          type="button"
-                          onClick={() => handleDelete(u)}
-                          title="Delete account"
-                          className="p-1.5 rounded-md text-slate-500 hover:text-red-600 hover:bg-red-50"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
+      <DataTable
+        data={users}
+        columns={columns}
+        rowKey={(u) => u.id}
+        loading={loading}
+        loadingText="Loading user accounts..."
+      />
 
-      {modalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4">
-          <div className="w-full max-w-md rounded-xl bg-white border border-slate-200 p-6 shadow-xl">
-            <div className="flex items-center justify-between pb-4 border-b border-slate-200">
-              <h2 className="font-display text-lg font-bold text-slate-900">
-                Create Faculty Account
-              </h2>
-              <button
-                type="button"
-                onClick={() => setModalOpen(false)}
-                className="p-1 text-slate-400 hover:text-slate-700"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-            <form onSubmit={handleCreate} className="mt-5 space-y-4">
-              <div>
-                <label className="block text-xs font-medium text-slate-700 mb-1">Full Name</label>
-                <input
-                  type="text"
-                  required
-                  value={form.username}
-                  onChange={(e) => setForm({ ...form, username: e.target.value })}
-                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#5B3DF5]"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-slate-700 mb-1">Email</label>
-                <input
-                  type="email"
-                  required
-                  value={form.email}
-                  onChange={(e) => setForm({ ...form, email: e.target.value })}
-                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#5B3DF5]"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-slate-700 mb-1">Password</label>
-                <input
-                  type="password"
-                  required
-                  minLength={6}
-                  value={form.password}
-                  onChange={(e) => setForm({ ...form, password: e.target.value })}
-                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#5B3DF5]"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-slate-700 mb-1">Role</label>
-                <select
-                  value={form.role}
-                  onChange={(e) => setForm({ ...form, role: e.target.value as 'ADMIN' | 'TEACHER' })}
-                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#5B3DF5]"
-                >
-                  <option value="TEACHER">TEACHER</option>
-                  <option value="ADMIN">ADMIN</option>
-                </select>
-              </div>
-              <div className="pt-4 flex justify-end gap-3 border-t border-slate-200">
-                <button
-                  type="button"
-                  onClick={() => setModalOpen(false)}
-                  className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={saving}
-                  className="rounded-lg bg-[#5B3DF5] px-4 py-2 text-sm font-medium text-white hover:bg-[#4C30D6]"
-                >
-                  {saving ? 'Creating...' : 'Create User'}
-                </button>
-              </div>
-            </form>
+      <Modal
+        open={modalOpen}
+        onClose={() => setModalOpen(false)}
+        title="Create Faculty Account"
+        subtitle="Provision an EduNova Administrator or Teacher login"
+        maxWidthClass="max-w-md"
+      >
+        <form onSubmit={handleCreate} className="space-y-4">
+          <div>
+            <label className="block text-xs font-semibold text-[#24243A] mb-1">Full Name</label>
+            <input
+              type="text"
+              required
+              value={form.username}
+              onChange={(e) => setForm({ ...form, username: e.target.value })}
+              className="w-full rounded-xl border border-[#ECEBF3] bg-[#F7F7FC] px-3.5 py-2 text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#7357E8]/30"
+            />
           </div>
-        </div>
-      )}
+          <div>
+            <label className="block text-xs font-semibold text-[#24243A] mb-1">Email</label>
+            <input
+              type="email"
+              required
+              value={form.email}
+              onChange={(e) => setForm({ ...form, email: e.target.value })}
+              className="w-full rounded-xl border border-[#ECEBF3] bg-[#F7F7FC] px-3.5 py-2 text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#7357E8]/30"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-[#24243A] mb-1">Password</label>
+            <input
+              type="password"
+              required
+              minLength={6}
+              value={form.password}
+              onChange={(e) => setForm({ ...form, password: e.target.value })}
+              className="w-full rounded-xl border border-[#ECEBF3] bg-[#F7F7FC] px-3.5 py-2 text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#7357E8]/30"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-[#24243A] mb-1">Role</label>
+            <select
+              value={form.role}
+              onChange={(e) => setForm({ ...form, role: e.target.value as 'ADMIN' | 'TEACHER' })}
+              className="w-full rounded-xl border border-[#ECEBF3] bg-[#F7F7FC] px-3.5 py-2 text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#7357E8]/30"
+            >
+              <option value="TEACHER">TEACHER</option>
+              <option value="ADMIN">ADMIN</option>
+            </select>
+          </div>
+          <div className="pt-4 flex justify-end gap-3 border-t border-[#ECEBF3]">
+            <button
+              type="button"
+              onClick={() => setModalOpen(false)}
+              className="rounded-xl border border-[#ECEBF3] px-4 py-2 text-xs font-semibold text-[#85859B]"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={saving}
+              className="rounded-xl bg-[#7357E8] px-4 py-2 text-xs font-semibold text-white hover:bg-[#4935A8]"
+            >
+              {saving ? 'Creating...' : 'Create User'}
+            </button>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 };

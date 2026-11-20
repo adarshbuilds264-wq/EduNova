@@ -2,23 +2,25 @@ import React from 'react';
 import { NavLink } from 'react-router-dom';
 import {
   LayoutDashboard,
-  Box,
   Users,
   BookOpen,
   CalendarDays,
   ClipboardEdit,
   Award,
+  Medal,
   BarChart3,
   FileSpreadsheet,
+  Box,
   MessageSquare,
   Code2,
   UserCog,
   Settings,
   LogOut,
   X,
-  GraduationCap,
 } from 'lucide-react';
 import type { AuthUser } from '../types';
+import { EduNovaLogo } from './EduNovaLogo';
+import { StudentAvatar } from './StudentAvatar';
 
 export interface NavRouteItem {
   to: string;
@@ -29,15 +31,16 @@ export interface NavRouteItem {
 
 export const SIDEBAR_NAV_ITEMS: NavRouteItem[] = [
   { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { to: '/observatory-3d', label: '3D Observatory', icon: Box },
   { to: '/students', label: 'Students', icon: Users },
   { to: '/subjects', label: 'Subjects', icon: BookOpen },
   { to: '/examinations', label: 'Examinations', icon: CalendarDays },
-  { to: '/marks', label: 'Marks Entry', icon: ClipboardEdit },
-  { to: '/results', label: 'Results & Grades', icon: Award },
-  { to: '/reports', label: 'Reports', icon: BarChart3 },
-  { to: '/import-export', label: 'CSV Import / Export', icon: FileSpreadsheet },
-  { to: '/ai-advisor', label: 'AI Advisor Chat', icon: MessageSquare },
+  { to: '/marks', label: 'Marks Management', icon: ClipboardEdit },
+  { to: '/results', label: 'Results', icon: Award },
+  { to: '/grades', label: 'Grade Management', icon: Medal },
+  { to: '/reports', label: 'Reports & Analytics', icon: BarChart3 },
+  { to: '/import-export', label: 'Import / Export', icon: FileSpreadsheet },
+  { to: '/observatory-3d', label: '3D Observatory', icon: Box },
+  { to: '/ai-advisor', label: 'AI Advisor', icon: MessageSquare },
   { to: '/python-inspector', label: 'Python Inspector', icon: Code2 },
   { to: '/users', label: 'User Management', icon: UserCog, adminOnly: true },
   { to: '/settings', label: 'Settings', icon: Settings },
@@ -64,29 +67,22 @@ export const Sidebar: React.FC<SidebarProps> = ({
     <>
       {mobileMenuOpen && (
         <div
-          className="fixed inset-0 z-40 bg-slate-900/50 lg:hidden"
+          className="fixed inset-0 z-40 bg-[#24243A]/40 lg:hidden"
           onClick={onCloseMobile}
         />
       )}
 
       <aside
-        className={`fixed inset-y-0 left-0 z-50 w-64 bg-[#0F1E3D] text-white flex flex-col transition-transform duration-200 lg:static lg:translate-x-0 ${
+        className={`fixed inset-y-0 left-0 z-50 w-64 bg-white border-r border-[#ECEBF3] flex flex-col transition-transform duration-200 lg:static lg:translate-x-0 ${
           mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
-        <div className="h-14 px-5 flex items-center justify-between border-b border-slate-800/80 shrink-0">
-          <div className="flex items-center gap-2.5">
-            <div className="w-7 h-7 rounded-md bg-[#5B3DF5] flex items-center justify-center">
-              <GraduationCap className="w-4 h-4 text-white" />
-            </div>
-            <span className="font-display text-base font-bold tracking-tight whitespace-nowrap">
-              AcadLedger
-            </span>
-          </div>
+        <div className="h-16 px-5 flex items-center justify-between border-b border-[#ECEBF3] shrink-0">
+          <EduNovaLogo size="md" />
           <button
             type="button"
             onClick={onCloseMobile}
-            className="lg:hidden p-1 text-slate-300 hover:text-white"
+            className="lg:hidden p-1.5 rounded-lg text-[#85859B] hover:text-[#24243A] hover:bg-[#F7F7FC]"
             aria-label="Close navigation menu"
           >
             <X className="w-4 h-4" />
@@ -102,10 +98,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 to={item.to}
                 onClick={onCloseMobile}
                 className={({ isActive }) =>
-                  `w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${
+                  `w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-colors whitespace-nowrap ${
                     isActive
-                      ? 'bg-[#5B3DF5] text-white'
-                      : 'text-slate-300 hover:bg-white/10 hover:text-white'
+                      ? 'bg-[#EEE9FF] text-[#7357E8] font-semibold'
+                      : 'text-[#85859B] hover:bg-[#F7F7FC] hover:text-[#24243A]'
                   }`
                 }
               >
@@ -116,17 +112,18 @@ export const Sidebar: React.FC<SidebarProps> = ({
           })}
         </nav>
 
-        <div className="p-4 border-t border-slate-800/80 shrink-0">
-          <div className="mb-3">
-            <p className="text-sm font-semibold text-white truncate">{user.username}</p>
-            <p className="text-xs text-slate-400 font-mono truncate">
-              {user.role} · {user.email}
-            </p>
+        <div className="p-4 border-t border-[#ECEBF3] shrink-0 space-y-3">
+          <div className="flex items-center gap-3">
+            <StudentAvatar name={user.username} size="md" />
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-[#24243A] truncate">{user.username}</p>
+              <p className="text-xs text-[#85859B] font-mono truncate">{user.role}</p>
+            </div>
           </div>
           <button
             type="button"
             onClick={onLogout}
-            className="w-full inline-flex items-center justify-center gap-2 rounded-lg border border-slate-700 bg-slate-900/60 px-3 py-2 text-xs font-medium text-slate-200 hover:bg-slate-800 hover:text-white transition-colors"
+            className="w-full inline-flex items-center justify-center gap-2 rounded-xl border border-[#ECEBF3] bg-[#F7F7FC] px-3 py-2 text-xs font-semibold text-[#24243A] hover:bg-[#EEE9FF] hover:text-[#4935A8] transition-colors"
           >
             <LogOut className="w-3.5 h-3.5" />
             Sign Out

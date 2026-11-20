@@ -13,6 +13,7 @@ import type { AuthUser, DashboardPayload, Examination } from './types';
 import { LoginView } from './components/LoginView';
 import { Sidebar, SIDEBAR_NAV_ITEMS } from './components/Sidebar';
 import { Navbar } from './components/Navbar';
+import { MobileBottomNav } from './components/MobileBottomNav';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { AcademicObservatory3D } from './components/AcademicObservatory3D';
 import { AIChatPanel } from './components/AIChatPanel';
@@ -24,6 +25,7 @@ import { SubjectsPage } from './pages/SubjectsPage';
 import { ExaminationsPage } from './pages/ExaminationsPage';
 import { MarksPage } from './pages/MarksPage';
 import { ResultsPage } from './pages/ResultsPage';
+import { GradesPage } from './pages/GradesPage';
 import { ReportsPage } from './pages/ReportsPage';
 import { ImportExportPage } from './pages/ImportExportPage';
 import { PythonInspectorPage } from './pages/PythonInspectorPage';
@@ -67,7 +69,7 @@ const WorkspaceShell: React.FC<WorkspaceShellProps> = ({
   const pageTitle = resolvePageTitle(location.pathname);
 
   return (
-    <div className="min-h-screen flex bg-[#F4F6FA] text-slate-900">
+    <div className="min-h-screen flex bg-[#F7F7FC] text-[#24243A]">
       <Sidebar
         user={user}
         mobileMenuOpen={mobileMenuOpen}
@@ -78,6 +80,8 @@ const WorkspaceShell: React.FC<WorkspaceShellProps> = ({
       <div className="flex-1 flex flex-col min-w-0">
         <Navbar
           pageTitle={pageTitle}
+          user={user}
+          dashboard={dashboard}
           onOpenMobileMenu={() => setMobileMenuOpen(true)}
           onOpenAiDrawer={() => setAiDrawerOpen(true)}
         />
@@ -85,8 +89,8 @@ const WorkspaceShell: React.FC<WorkspaceShellProps> = ({
         <main
           className={
             isObservatory
-              ? 'flex-1'
-              : 'flex-1 p-5 lg:p-8 max-w-[1380px] w-full mx-auto'
+              ? 'flex-1 pb-16 lg:pb-0'
+              : 'flex-1 p-5 lg:p-8 pb-24 lg:pb-8 max-w-[1380px] w-full mx-auto'
           }
         >
           <Routes>
@@ -98,6 +102,7 @@ const WorkspaceShell: React.FC<WorkspaceShellProps> = ({
                   examinations={examinations}
                   selectedExamId={selectedExamId}
                   onSelectExam={onSelectExam}
+                  user={user}
                 />
               }
             />
@@ -197,6 +202,17 @@ const WorkspaceShell: React.FC<WorkspaceShellProps> = ({
               }
             />
             <Route
+              path="/grades"
+              element={
+                <GradesPage
+                  dashboard={dashboard}
+                  examinations={examinations}
+                  selectedExamId={selectedExamId}
+                  onSelectExam={onSelectExam}
+                />
+              }
+            />
+            <Route
               path="/reports"
               element={
                 <ReportsPage
@@ -239,18 +255,20 @@ const WorkspaceShell: React.FC<WorkspaceShellProps> = ({
         </main>
       </div>
 
+      <MobileBottomNav />
+
       {/* Slide-over Quick AI Advisor Drawer */}
       {aiDrawerOpen && (
-        <div className="fixed inset-0 z-50 flex justify-end bg-slate-900/40">
+        <div className="fixed inset-0 z-50 flex justify-end bg-[#24243A]/40 backdrop-blur-[2px]">
           <div className="w-full max-w-xl bg-white h-full shadow-2xl flex flex-col">
-            <div className="px-5 py-3 border-b border-slate-200 flex items-center justify-between">
-              <span className="font-display text-sm font-bold text-slate-900">
-                AI Academic Advisor Drawer
+            <div className="px-5 py-3.5 border-b border-[#ECEBF3] flex items-center justify-between">
+              <span className="font-display text-sm font-bold text-[#24243A]">
+                EduNova AI Advisor Drawer
               </span>
               <button
                 type="button"
                 onClick={() => setAiDrawerOpen(false)}
-                className="p-1 text-slate-500 hover:text-slate-900"
+                className="p-1.5 rounded-lg text-[#85859B] hover:text-[#24243A] hover:bg-[#F7F7FC]"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -342,8 +360,8 @@ const AppRoutes: React.FC = () => {
 
   if (authChecking) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[#F4F6FA] text-sm text-slate-600">
-        Verifying session...
+      <div className="min-h-screen flex items-center justify-center bg-[#F7F7FC] text-sm text-[#85859B]">
+        Verifying EduNova session...
       </div>
     );
   }
@@ -389,10 +407,10 @@ const AppRoutes: React.FC = () => {
 
       {toast && (
         <div
-          className={`fixed bottom-5 right-5 z-50 rounded-lg px-4 py-3 text-xs font-medium shadow-lg border ${
+          className={`fixed bottom-20 lg:bottom-5 right-5 z-50 rounded-xl px-4 py-3 text-xs font-semibold shadow-lg border ${
             toast.type === 'error'
-              ? 'bg-red-50 border-red-200 text-red-800'
-              : 'bg-[#0F1E3D] border-slate-700 text-white'
+              ? 'bg-[#FDECEC] border-[#EF6262]/40 text-[#C23E3E]'
+              : 'bg-[#24243A] border-[#24243A] text-white'
           }`}
         >
           {toast.msg}

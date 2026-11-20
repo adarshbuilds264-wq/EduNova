@@ -6,13 +6,24 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { LoginView } from '../components/LoginView';
 import { ProtectedRoute } from '../components/ProtectedRoute';
 import { Sidebar } from '../components/Sidebar';
+import { Navbar } from '../components/Navbar';
+import { MobileBottomNav } from '../components/MobileBottomNav';
+import { Pagination } from '../components/Pagination';
 import { DataTable } from '../components/DataTable';
 import { StudentsPage } from '../pages/StudentsPage';
 import { MarksPage } from '../pages/MarksPage';
 import { ResultsPage } from '../pages/ResultsPage';
 import { DashboardPage } from '../pages/DashboardPage';
+import { GradesPage } from '../pages/GradesPage';
 import { api } from '../services/api';
-import type { AuthUser, DashboardPayload, Examination, Student, StudentResult, Subject } from '../types';
+import type {
+  AuthUser,
+  DashboardPayload,
+  Examination,
+  Student,
+  StudentResult,
+  Subject,
+} from '../types';
 
 vi.mock('../services/api', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../services/api')>();
@@ -26,6 +37,7 @@ vi.mock('../services/api', async (importOriginal) => {
       getSubjects: vi.fn(),
       getMarks: vi.fn(),
       saveMark: vi.fn(),
+      getDashboard: vi.fn(),
       downloadExportCSV: vi.fn(),
       downloadStudentResultCSV: vi.fn(),
       cohortInsightsAI: vi.fn(),
@@ -152,17 +164,62 @@ const SAMPLE_RESULTS: StudentResult[] = [
   },
 ];
 
-describe('AcadLedger Frontend Suite', () => {
+const SAMPLE_DASHBOARD: DashboardPayload = {
+  exam_id: 2,
+  kpis: {
+    total_students: 10,
+    total_subjects: 5,
+    total_examinations: 2,
+    average_percentage: 78.4,
+    pass_rate: 80.0,
+    highest_percentage: 93.8,
+    lowest_percentage: 56.2,
+  },
+  summary: {
+    grade_ranges_tuple: [],
+    academic_branches_tuple: ['CSE', 'AIML', 'ECE'],
+    percentages_list: [93.8, 56.2],
+    grade_distribution_dict: { 'A+': 2, A: 3, B: 2, F: 2 },
+    average_percentage: 78.4,
+    highest_percentage: 93.8,
+    lowest_percentage: 56.2,
+    pass_count: 8,
+    evaluated_count: 10,
+    pass_rate: 80.0,
+    top_students: [SAMPLE_RESULTS[0]],
+    low_performers: [SAMPLE_RESULTS[1]],
+  },
+  results: SAMPLE_RESULTS,
+  subject_stats: [
+    {
+      subject_id: 1,
+      subject_code: 'PY301',
+      subject_name: 'Python Programming',
+      max_marks: 100,
+      passing_marks: 40,
+      average_marks: 79,
+      pass_rate: 90,
+      entries: 10,
+    },
+  ],
+};
+
+describe('EduNova Frontend Suite', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  it('renders LoginView and authenticates via quick demo account', async () => {
+  it('renders EduNova LoginView, Forgot Password modal, and authenticates via demo preset', async () => {
     const onSuccess = vi.fn();
     vi.mocked(api.login).mockResolvedValueOnce({ access_token: 'tok-123', user: ADMIN_USER });
 
     render(<LoginView onSuccess={onSuccess} />);
+    expect(screen.getByText((_, node) => node?.tagName === 'SPAN' && node.textContent === 'EduNova')).toBeInTheDocument();
     expect(screen.getByText('Sign in to workspace')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText('Forgot Password?'));
+    expect(screen.getByText('Password Reset Help')).toBeInTheDocument();
+    fireEvent.click(screen.getByText('Got it'));
 
     fireEvent.click(screen.getByText('Register Account'));
     expect(screen.getByText('Create faculty account')).toBeInTheDocument();
@@ -218,6 +275,7 @@ describe('AcadLedger Frontend Suite', () => {
       </MemoryRouter>
     );
     expect(screen.getByText('User Management')).toBeInTheDocument();
+    expect(screen.getByText('Grade Management')).toBeInTheDocument();
     expect(screen.getByText('3D Observatory')).toBeInTheDocument();
 
     rerender(
@@ -226,32 +284,60 @@ describe('AcadLedger Frontend Suite', () => {
       </MemoryRouter>
     );
     expect(screen.queryByText('User Management')).not.toBeInTheDocument();
-    expect(screen.getByText('Marks Entry')).toBeInTheDocument();
+    expect(screen.getByText('Marks Management')).toBeInTheDocument();
   });
 
-  it('renders generic DataTable with rows and empty states', () => {
+  it('renders Navbar global search and NotificationPanel academic alerts', () => {
     render(
-      <DataTable
-        data={SAMPLE_STUDENTS}
-        rowKey={(s) => s.id}
-        columns={[
-          { key: 'roll', header: 'Roll', render: (s) => s.roll_no },
-          { key: 'name', header: 'Name', render: (s) => s.name },
-        ]}
-      />
+      <MemoryRouter>
+        <Navbar
+          pageTitle="Dashboard"
+          user={ADMIN_USER}
+          dashboard={SAMPLE_DASHBOARD}
+          onOpenMobileMenu={vi.fn()}
+          onOpenAiDrawer={vi.fn()}
+        />
+      </MemoryRouter>
+    );
+
+    const searchInput = screen.getByLabelText('Global search');
+    fireEvent.focus(searchInput);
+    fireEvent.change(searchInput, { target: { value: 'Rahul' } });
+    expect(screen.getByText('Rahul Sharma')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByLabelText('Toggle academic alerts'));
+    expect(screen.getByText('Academic Alerts')).toBeInTheDocument();
+    expect(screen.getByText(/Cohort Leader: Rahul Sharma/i)).toBeInTheDocument();
+  });
+
+  it('renders generic DataTable, Pagination, and MobileBottomNav', () => {
+    const onPageChange = vi.fn();
+    render(
+      <MemoryRouter>
+        <DataTable
+          data={SAMPLE_STUDENTS}
+          rowKey={(s) => s.id}
+          columns={[
+            { key: 'roll', header: 'Roll', render: (s) => s.roll_no },
+            { key: 'name', header: 'Name', render: (s) => s.name },
+          ]}
+          footer={
+            <Pagination
+              currentPage={1}
+              totalItems={16}
+              pageSize={8}
+              onPageChange={onPageChange}
+            />
+          }
+        />
+        <MobileBottomNav />
+      </MemoryRouter>
     );
     expect(screen.getByText('Rahul Sharma')).toBeInTheDocument();
     expect(screen.getByText('2026003')).toBeInTheDocument();
-
-    render(
-      <DataTable
-        data={[]}
-        rowKey={(s: Student) => s.id}
-        columns={[{ key: 'name', header: 'Name', render: (s) => s.name }]}
-        emptyState={<div>No rows found</div>}
-      />
-    );
-    expect(screen.getByText('No rows found')).toBeInTheDocument();
+    fireEvent.click(screen.getByText('2'));
+    expect(onPageChange).toHaveBeenCalledWith(2);
+    expect(screen.getByLabelText('Mobile navigation')).toBeInTheDocument();
   });
 
   it('StudentsPage fetches records and passes search/branch filters to API', async () => {
@@ -287,19 +373,20 @@ describe('AcadLedger Frontend Suite', () => {
     const onDataChanged = vi.fn();
 
     render(
-      <MarksPage
-        examinations={SAMPLE_EXAMS}
-        selectedExamId={2}
-        onSelectExam={vi.fn()}
-        onDataChanged={onDataChanged}
-        onNotify={onNotify}
-      />
+      <MemoryRouter>
+        <MarksPage
+          examinations={SAMPLE_EXAMS}
+          selectedExamId={2}
+          onSelectExam={vi.fn()}
+          onDataChanged={onDataChanged}
+          onNotify={onNotify}
+        />
+      </MemoryRouter>
     );
 
     await waitFor(() => expect(screen.getByText('Python Programming')).toBeInTheDocument());
 
     const input = screen.getByPlaceholderText('0–100');
-    // Test above max marks (>100)
     fireEvent.change(input, { target: { value: '125' } });
     expect(screen.getByText('Out of Range')).toBeInTheDocument();
     fireEvent.click(screen.getByText('Save Student Marks'));
@@ -308,7 +395,6 @@ describe('AcadLedger Frontend Suite', () => {
       expect(api.saveMark).not.toHaveBeenCalled();
     });
 
-    // Test valid marks
     fireEvent.change(input, { target: { value: '88' } });
     fireEvent.click(screen.getByText('Save Student Marks'));
     await waitFor(() => {
@@ -322,7 +408,7 @@ describe('AcadLedger Frontend Suite', () => {
     });
   });
 
-  it('ResultsPage filters PASS/FAIL students and opens marksheet modal', async () => {
+  it('ResultsPage filters PASS/FAIL students and opens EduNova marksheet modal', async () => {
     render(
       <ResultsPage
         results={SAMPLE_RESULTS}
@@ -344,51 +430,11 @@ describe('AcadLedger Frontend Suite', () => {
     expect(screen.getByText('Official Academic Marksheet')).toBeInTheDocument();
   });
 
-  it('DashboardPage renders KPI cards and cohort metrics', () => {
-    const dash: DashboardPayload = {
-      exam_id: 2,
-      kpis: {
-        total_students: 10,
-        total_subjects: 5,
-        total_examinations: 2,
-        average_percentage: 78.4,
-        pass_rate: 80.0,
-        highest_percentage: 93.8,
-        lowest_percentage: 56.2,
-      },
-      summary: {
-        grade_ranges_tuple: [],
-        academic_branches_tuple: ['CSE', 'AIML', 'ECE'],
-        percentages_list: [93.8, 56.2],
-        grade_distribution_dict: { 'A+': 2, A: 3, B: 2, F: 2 },
-        average_percentage: 78.4,
-        highest_percentage: 93.8,
-        lowest_percentage: 56.2,
-        pass_count: 8,
-        evaluated_count: 10,
-        pass_rate: 80.0,
-        top_students: [SAMPLE_RESULTS[0]],
-        low_performers: [SAMPLE_RESULTS[1]],
-      },
-      results: SAMPLE_RESULTS,
-      subject_stats: [
-        {
-          subject_id: 1,
-          subject_code: 'PY301',
-          subject_name: 'Python Programming',
-          max_marks: 100,
-          passing_marks: 40,
-          average_marks: 79,
-          pass_rate: 90,
-          entries: 10,
-        },
-      ],
-    };
-
+  it('GradesPage filters by grade tier and runs interactive grade simulator', () => {
     render(
       <MemoryRouter>
-        <DashboardPage
-          data={dash}
+        <GradesPage
+          dashboard={SAMPLE_DASHBOARD}
           examinations={SAMPLE_EXAMS}
           selectedExamId={2}
           onSelectExam={vi.fn()}
@@ -396,8 +442,28 @@ describe('AcadLedger Frontend Suite', () => {
       </MemoryRouter>
     );
 
+    expect(screen.getByText('Grade Management & Scale Rules')).toBeInTheDocument();
+    expect(screen.getByText('A · Excellent')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByLabelText(/Failed Any Subject/i));
+    expect(screen.getByText('F · Needs Improvement')).toBeInTheDocument();
+  });
+
+  it('DashboardPage renders EduNova greeting, KPI cards, and cohort metrics', () => {
+    render(
+      <MemoryRouter>
+        <DashboardPage
+          data={SAMPLE_DASHBOARD}
+          examinations={SAMPLE_EXAMS}
+          selectedExamId={2}
+          onSelectExam={vi.fn()}
+          user={ADMIN_USER}
+        />
+      </MemoryRouter>
+    );
+
+    expect(screen.getByText(/Dr\./i)).toBeInTheDocument();
     expect(screen.getByText('Academic Performance Overview')).toBeInTheDocument();
     expect(screen.getByText('78.4%')).toBeInTheDocument();
-    expect(screen.getByText('80.0%')).toBeInTheDocument();
   });
 });
